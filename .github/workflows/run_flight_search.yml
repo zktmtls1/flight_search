@@ -20,13 +20,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      # 멀티라인 시크릿을 환경변수로 export (CR 제거)
       - name: Export secrets to env
+        shell: bash
         run: |
-          cat <<'EOF' >> $GITHUB_ENV
-          ${{ secrets.FLIGHT_API_KEY }}
-          EOF
+          printf "%s\n" "${{ secrets.FLIGHT_API_KEY }}" | tr -d '\r' >> "$GITHUB_ENV"
 
+      # 존재만 확인(값은 마스킹)
       - name: Debug env presence
+        shell: bash
         run: |
           env | grep -E 'AMADEUS_CLIENT_ID|AMADEUS_CLIENT_SECRET|AMADEUS_HOSTNAME' | sed 's/=.*/=***redacted***/'
 
