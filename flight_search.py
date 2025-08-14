@@ -76,19 +76,19 @@ def main():
     }
     try:
         try:
-        r = amadeus.shopping.flight_offers_search.get(**params)
-        offers = r.data
-
-        if not offers:
-            print("검색 결과가 없습니다. 날짜/목적지/호스트(test/production)를 바꿔보세요.")
-            return
-
-        # ➜ 최저가 1건만 출력
-        cheapest = min(offers, key=lambda o: float(o["price"]["grandTotal"]))
-        print_offer(1, cheapest)
-
-    except ResponseError as e:
-        print("Flight Offers Search 오류:", e)
+            r = amadeus.shopping.flight_offers_search.get(**params)
+            offers = r.data
+    
+            if not offers:
+                print("검색 결과가 없습니다. 날짜/목적지/호스트(test/production)를 바꿔보세요.")
+                return
+    
+            # ➜ 최저가 1건만 출력
+            cheapest = min(offers, key=lambda o: float(o["price"]["grandTotal"]))
+            print_offer(1, cheapest)
+    
+        except ResponseError as e:
+            print("Flight Offers Search 오류:", e)
 
 if __name__ == "__main__":
     main()
