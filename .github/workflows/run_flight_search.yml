@@ -1,11 +1,18 @@
 name: Run flight_search
 
 on:
-  workflow_dispatch:  # Actions 탭에서 수동 실행
+  workflow_dispatch:           # 수동 실행 버튼 유지
+  schedule:
+    - cron: "*/20 * * * *"     # 20분마다 (UTC 기준)
 
-# CSV를 레포에 커밋/푸시하려면 권한이 필요해요
+# CSV 커밋/푸시 권한
 permissions:
   contents: write
+
+# 동시 실행 방지(이전 실행이 길어질 때 겹치지 않도록)
+concurrency:
+  group: flight_search
+  cancel-in-progress: true
 
 jobs:
   run:
@@ -14,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # (권장) 히스토리도 함께 체크아웃
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,7 +39,7 @@ jobs:
         run: |
           printf "%s\n" "${{ secrets.FLIGHT_API_KEY }}" | tr -d '\r' >> "$GITHUB_ENV"
 
-      # 존재만 확인(값은 마스킹). 못 찾으면 실패하지 않게 처리
+      # 못 찾더라도 실패하지 않게
       - name: Debug env presence
         shell: bash
         run: |
@@ -42,7 +49,6 @@ jobs:
       - name: Run script
         run: python flight_search.py
 
-      # 생성된 CSV 업로드(아티팩트). 경로는 스크립트에 맞춰 data/*.csv 포함
       - name: Upload CSV artifact
         uses: actions/upload-artifact@v4
         with:
@@ -52,7 +58,6 @@ jobs:
             offers_*_*.csv
           if-no-files-found: ignore
 
-      # CSV를 레포에 누적 저장
       - name: Commit and push data
         run: |
           git config user.name "github-actions[bot]"
