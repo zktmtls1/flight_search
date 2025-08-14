@@ -62,6 +62,8 @@ def main():
     except ResponseError as e:
         print("Locations 오류:", e)
 
+    
+
     # 2) 항공권 검색 (ICN → NRT, 제주항공 7C, KRW)
     params = {
         "originLocationCode": "ICN",
@@ -73,18 +75,18 @@ def main():
         "max": 50,
     }
     try:
+        try:
         r = amadeus.shopping.flight_offers_search.get(**params)
         offers = r.data
-        print(f"\n[Offers] 총 {len(offers)}건")
-        if offers:
-            # 최저가
-            min_price = min(float(o["price"]["grandTotal"]) for o in offers)
-            print(f"최저가: {min_price:.0f} KRW\n")
-            # 결과 요약
-            for i, o in enumerate(offers[:], 1):
-                print_offer(i, o)
-        else:
+
+        if not offers:
             print("검색 결과가 없습니다. 날짜/목적지/호스트(test/production)를 바꿔보세요.")
+            return
+
+        # ➜ 최저가 1건만 출력
+        cheapest = min(offers, key=lambda o: float(o["price"]["grandTotal"]))
+        print_offer(1, cheapest)
+
     except ResponseError as e:
         print("Flight Offers Search 오류:", e)
 
