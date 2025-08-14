@@ -3,12 +3,18 @@ name: Run flight_search
 on:
   workflow_dispatch:  # Actions 탭에서 수동 실행
 
+# CSV를 레포에 커밋/푸시하려면 권한이 필요해요
+permissions:
+  contents: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # (권장) 히스토리도 함께 체크아웃
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,18 +32,31 @@ jobs:
         run: |
           printf "%s\n" "${{ secrets.FLIGHT_API_KEY }}" | tr -d '\r' >> "$GITHUB_ENV"
 
-      # 존재만 확인(값은 마스킹)
+      # 존재만 확인(값은 마스킹). 못 찾으면 실패하지 않게 처리
       - name: Debug env presence
         shell: bash
         run: |
-          env | grep -E 'AMADEUS_CLIENT_ID|AMADEUS_CLIENT_SECRET|AMADEUS_HOSTNAME' | sed 's/=.*/=***redacted***/'
+          env | grep -E 'AMADEUS_CLIENT_ID|AMADEUS_CLIENT_SECRET|AMADEUS_HOSTNAME' \
+            | sed 's/=.*/=***redacted***/' || true
 
       - name: Run script
         run: python flight_search.py
 
+      # 생성된 CSV 업로드(아티팩트). 경로는 스크립트에 맞춰 data/*.csv 포함
       - name: Upload CSV artifact
         uses: actions/upload-artifact@v4
         with:
           name: offers
-          path: offers_*_*.csv
+          path: |
+            data/*.csv
+            offers_*_*.csv
           if-no-files-found: ignore
+
+      # CSV를 레포에 누적 저장
+      - name: Commit and push data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.csv || true
+          git commit -m "data: append $(date -u +'%F %T') [skip ci]" || echo "No changes"
+          git push
