@@ -1,9 +1,10 @@
-from amadeus import Client, ResponseError, Location
+# -*- coding: utf-8 -*-
+from amadeus import Client, ResponseError
 from dotenv import load_dotenv  # type: ignore
 import os
 from typing import Any
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import csv
 import statistics as stats
 
@@ -16,13 +17,11 @@ amadeus = Client(
 )
 
 DATA_DIR = Path(__file__).with_name("data")
-
 KOREAN_LCC = ["7C", "LJ", "TW", "BX", "RS", "ZE", "RF"]
 
-def _csv_path(origin: str, dest: str, airline: str) -> Path:
+def _csv_path(origin: str, dest: str) -> Path:
     DATA_DIR.mkdir(exist_ok=True)
-    name = f"prices_{origin.lower()}-{dest.lower()}_{airline.lower()}.csv"
-    return DATA_DIR / name
+    return DATA_DIR / f"prices_{origin.lower()}-{dest.lower()}_lcc.csv"
 
 def append_price_row(path: Path, row: dict) -> None:
     header = ["collected_at_utc","travel_date","origin","dest","airline",
@@ -65,12 +64,8 @@ def print_offer(idx: int, o: dict[str, Any]) -> None:
     flight_no = f'{carrier}{segs[0]["number"]}'
     duration = it.get("duration", "")
     stops = len(segs) - 1
-
-    print(
-        f"[{idx}] {carrier} {dep_airport}→{arr_airport}  {dep_time} → {arr_time}  "
-        f"{'직항' if stops == 0 else f'경유 {stops}회'}  {duration}  "
-        f"{flight_no}  {price} {currency}"
-    )
+    print(f"[{idx}] {carrier} {dep_airport}→{arr_airport}  {dep_time} → {arr_time}  "
+          f"{'직항' if stops == 0 else f'경유 {stops}회'}  {duration}  {flight_no}  {price} {currency}")
 
 def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     cheapest: dict[str, dict[str, Any]] = {}
@@ -87,16 +82,8 @@ def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[st
 
 def main():
     origin = "ICN"
-    dest = "NRT"           
-    travel_date = "2025-09-10"
-
-    try:
-        r_loc = amadeus.reference_data.locations.get(keyword="TYO", subType=Location.AIRPORT)
-        print(f"[Locations] 결과 {len(r_loc.data)}건 (예시 3건)")
-        for item in r_loc.data[:3]:
-            print("-", item.get("iataCode"), item.get("name"))
-    except ResponseError as e:
-        print("Locations 오류:", e)
+    dest = "NRT"
+    travel_date = os.getenv("TRAVEL_DATE") or (date.today() + timedelta(days=30)).isoformat()
 
     params = {
         "originLocationCode": origin,
@@ -105,35 +92,32 @@ def main():
         "adults": 1,
         "currencyCode": "KRW",
         "includedAirlineCodes": ",".join(KOREAN_LCC),
-        "max": 200,  # 넉넉히
+        "max": 200,
     }
     try:
         r = amadeus.shopping.flight_offers_search.get(**params)
         offers: list[dict[str, Any]] = r.data or []
-
         if not offers:
-            print("검색 결과가 없습니다. 날짜/목적지/호스트(test/production)를 바꿔보세요.")
+            print(f"검색 결과가 없습니다. (출발일 {travel_date})")
             return
 
         by_airline = group_cheapest_by_airline(offers)
+        csv_path = _csv_path(origin, dest)
 
         for code in KOREAN_LCC:
             o = by_airline.get(code)
             if not o:
                 continue
-
             print_offer(1, o)
-
             it = o["itineraries"][0]; segs = it["segments"]
             dep, arr = segs[0]["departure"], segs[-1]["arrival"]
-            flight_no = f'{segs[0]["carrierCode"]}{segs[0]["number"]}'
             row = {
                 "collected_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "travel_date": travel_date,
                 "origin": origin,
                 "dest": dest,
                 "airline": code,
-                "flight_no": flight_no,
+                "flight_no": f'{segs[0]["carrierCode"]}{segs[0]["number"]}',
                 "dep_time": dep["at"],
                 "arr_time": arr["at"],
                 "stops": len(segs) - 1,
@@ -141,19 +125,19 @@ def main():
                 "price": float(o["price"]["grandTotal"]),
                 "currency": o["price"]["currency"],
             }
-            csv_path = _csv_path(origin, dest, code)
             append_price_row(csv_path, row)
 
             avg7 = rolling_avg(csv_path, days=7)
             if avg7 is not None:
                 threshold = avg7 * 0.8
                 if row["price"] <= threshold:
-                    print(f"[{code}] 알림조건 충족: 현재가 {row['price']:.0f} ≤ 최근7일 평균의 80%({threshold:.0f})")
+                    print(f"[{code}] 현재가 {row['price']:.0f} ≤ 최근7일 평균의 80%({threshold:.0f})")
             else:
-                print(f"[{code}] 최근 7일 평균 없음(초기 수집 중)")
+                print(f"[{code}] 최근 7일 평균 없음")
 
     except ResponseError as e:
-        print("Flight Offers Search 오류:", e)
+        print("Flight Offers Search 오류:", getattr(e.response, "status_code", "?"))
+        print(getattr(e.response, "body", ""))
 
 if __name__ == "__main__":
     main()
