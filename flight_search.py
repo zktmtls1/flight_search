@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-# python flight_search.py
-
 from amadeus import Client, ResponseError, Location
 from dotenv import load_dotenv  # type: ignore
 import os
@@ -12,7 +9,6 @@ import statistics as stats
 
 load_dotenv()
 
-# hostname: "test" 또는 "production"
 amadeus = Client(
     client_id=os.getenv("AMADEUS_CLIENT_ID"),
     client_secret=os.getenv("AMADEUS_CLIENT_SECRET"),
@@ -21,7 +17,6 @@ amadeus = Client(
 
 DATA_DIR = Path(__file__).with_name("data")
 
-# 🇰🇷 한국 LCC IATA 코드
 KOREAN_LCC = ["7C", "LJ", "TW", "BX", "RS", "ZE", "RF"]
 
 def _csv_path(origin: str, dest: str, airline: str) -> Path:
@@ -78,7 +73,6 @@ def print_offer(idx: int, o: dict[str, Any]) -> None:
     )
 
 def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """오퍼들을 항공사 코드별 최저가 한 건으로 묶는다(첫 구간 carrierCode 기준)."""
     cheapest: dict[str, dict[str, Any]] = {}
     for o in offers:
         try:
@@ -92,12 +86,10 @@ def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[st
     return cheapest
 
 def main():
-    # ▼ 필요 시 수정: 경로/날짜
     origin = "ICN"
-    dest = "NRT"           # 하네다=HND
+    dest = "NRT"           
     travel_date = "2025-08-15"
 
-    # 1) (옵션) 도쿄 권역 공항 몇 개만 표시
     try:
         r_loc = amadeus.reference_data.locations.get(keyword="TYO", subType=Location.AIRPORT)
         print(f"[Locations] 결과 {len(r_loc.data)}건 (예시 3건)")
@@ -106,7 +98,6 @@ def main():
     except ResponseError as e:
         print("Locations 오류:", e)
 
-    # 2) 한국 LCC 전체를 한 번에 검색 후, 항공사별 최저가 추출
     params = {
         "originLocationCode": origin,
         "destinationLocationCode": dest,
@@ -124,19 +115,15 @@ def main():
             print("검색 결과가 없습니다. 날짜/목적지/호스트(test/production)를 바꿔보세요.")
             return
 
-        # 항공사별 최저가 하나씩
         by_airline = group_cheapest_by_airline(offers)
 
-        # KOREAN_LCC 순서대로 출력/저장 (결과에 없는 항공사는 건너뜀)
         for code in KOREAN_LCC:
             o = by_airline.get(code)
             if not o:
                 continue
 
-            # 콘솔 출력(항공사별 1줄)
             print_offer(1, o)
 
-            # CSV 저장 + 7일 평균/알림 체크
             it = o["itineraries"][0]; segs = it["segments"]
             dep, arr = segs[0]["departure"], segs[-1]["arrival"]
             flight_no = f'{segs[0]["carrierCode"]}{segs[0]["number"]}'
