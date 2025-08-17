@@ -88,7 +88,7 @@ def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[st
 def main():
     origin = "ICN"
     dest = "NRT"           
-    travel_date = "2025-08-15"
+    travel_date = "2025-09-10"
 
     try:
         r_loc = amadeus.reference_data.locations.get(keyword="TYO", subType=Location.AIRPORT)
