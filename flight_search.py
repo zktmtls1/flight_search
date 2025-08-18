@@ -39,7 +39,7 @@ def main():
     origin = "ICN"
     dest = "NRT"
     travel_date = "2025-08-25"
-    lcc_codes = ["7C","TW","LJ","ZE","RS","BX","4V"]
+    lcc_codes = ["KE","OZ","7C","TW","LJ","ZE","RS","BX","YP"]
 
     params = {
         "originLocationCode": origin,
