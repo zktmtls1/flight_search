@@ -83,7 +83,7 @@ def group_cheapest_by_airline(offers: list[dict[str, Any]]) -> dict[str, dict[st
 def main():
     origin = "ICN"
     dest = "NRT"
-    travel_date = os.getenv("TRAVEL_DATE") or (date.today() + timedelta(days=30)).isoformat()
+    travel_date = "2025-08-25"
 
     params = {
         "originLocationCode": origin,
