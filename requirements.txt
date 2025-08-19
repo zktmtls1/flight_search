@@ -1,2 +1,0 @@
-amadeus
-python-dotenv
