@@ -1,0 +1,79 @@
+name: Run Monthly Cheapest Search
+
+# 수동으로만 실행 가능하도록 workflow_dispatch만 남김
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Origin IATA Code (e.g., ICN)'
+        required: true
+        default: 'ICN'
+      dest:
+        description: 'Destination IATA Code (e.g., NRT)'
+        required: true
+        default: 'NRT'
+      months_ahead:
+        description: 'Months to search ahead'
+        required: true
+        default: '12'
+      start_date:
+        description: 'Start date (YYYY-MM-DD, optional)'
+        required: false
+        
+# CSV 커밋/푸시 권한
+permissions:
+  contents: write
+
+# 동시 실행 방지
+concurrency:
+  group: month_cheapest_search # 기존 그룹과 겹치지 않도록 새 이름 지정
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      # GitHub Secrets에 저장된 API 키를 환경변수로 로드
+      - name: Export secrets to env
+        shell: bash
+        run: |
+          printf "%s\n" "${{ secrets.FLIGHT_API_KEY }}" | tr -d '\r' >> "$GITHUB_ENV"
+
+      # 수동 실행 시 입력받은 값을 스크립트가 사용할 환경변수로 설정
+      - name: Set script parameters
+        run: |
+          echo "ORIGIN=${{ inputs.origin }}" >> "$GITHUB_ENV"
+          echo "DEST=${{ inputs.dest }}" >> "$GITHUB_ENV"
+          echo "MONTHS_AHEAD=${{ inputs.months_ahead }}" >> "$GITHUB_ENV"
+          # 시작 날짜는 입력값이 있을 때만 설정
+          if [ -n "${{ inputs.start_date }}" ]; then
+            echo "START_DATE=${{ inputs.start_date }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run script
+        # 실행할 파이썬 파일을 month_cheapest.py로 변경
+        run: python month_cheapest.py
+
+      - name: Commit and push data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # data/month_... 로 시작하는 CSV 파일만 추가하도록 경로 수정
+          git add data/month_*.csv || true
+          git commit -m "data: update monthly cheapest prices for ${{ inputs.origin }}-${{ inputs.dest }} [skip ci]" || echo "No changes to commit"
+          git push
