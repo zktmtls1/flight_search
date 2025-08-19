@@ -1,0 +1,47 @@
+{
+  "data": [                ← 여러 개의 ‘오퍼(운임조합)’ 목록
+    {
+      "type": "flight-offer",
+      "id": "1",
+      "oneWay": false,
+      "numberOfBookableSeats": 9,
+      "itineraries": [      ← 여정(편도=1개, 왕복=2개, 멀티시티=여러개)
+        {
+          "duration": "PT2H20M",
+          "segments": [     ← 구간(환승이 있으면 2개 이상)
+            {
+              "carrierCode": "7C",
+              "number": "1103",
+              "aircraft": {"code": "320"},
+              "departure": {"iataCode": "ICN", "terminal": "1", "at": "2025-08-25T10:35:00"},
+              "arrival":   {"iataCode": "NRT", "terminal": "3", "at": "2025-08-25T12:55:00"},
+              "duration": "PT2H20M"
+            }
+            // 환승이 있으면 여기 다음 segment가 더 있음
+          ]
+        }
+      ],
+      "price": {            ← 이 오퍼의 가격(요약)
+        "currency": "KRW",
+        "total": "188200.00",
+        "grandTotal": "188200.00"
+      },
+      "validatingAirlineCodes": ["7C"],
+      "travelerPricings": [  ← 승객별 운임·수하물 등 상세
+        {
+          "travelerId": "1",
+          "fareOption": "STANDARD",
+          "price": {"currency":"KRW", "total":"188200.00"},
+          "fareDetailsBySegment": [
+            {
+              "segmentId": "1",
+              "cabin": "ECONOMY",
+              "includedCheckedBags": {"quantity": 1}  ← 수하물 정보가 여기 들어있음(있을 때만)
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "meta": {...}, "dictionaries": {...}  ← 부가정보(있을 수도, 없을 수도)
+}
