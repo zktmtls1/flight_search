@@ -62,10 +62,11 @@ def compare_last_two_prices(path: Path, airline: str, email_receiver: str) -> No
         msg = f"{airline} 가격 상승: {prev_price:.0f} → {last_price:.0f}"
     elif last_price < prev_price:
         msg = f"{airline} 가격 하락: {prev_price:.0f} → {last_price:.0f}"
+        send_email(f"[항공권 가격 알림] {airline}", msg, email_receiver)
     else:
         msg = f"{airline} 가격 동일: {last_price:.0f}"
     print(msg)
-    send_email(f"[항공권 가격 알림] {airline}", msg, email_receiver)
+    
 
 def send_email(subject: str, body: str, receiver: str) -> None:
     """
