@@ -90,7 +90,6 @@ def main():
                 "currency": o["price"]["currency"],
             }
             append_row(csv_path(origin, dest, al), row)
-            print(f"{al}: {row['price']:.0f} {row['currency']} 저장됨")
 
     except ResponseError as e:
         print("Flight Offers Search 오류:", e)
