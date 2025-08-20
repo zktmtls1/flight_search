@@ -63,18 +63,7 @@ def _rows_equivalent(last: dict[str, str], new: dict[str, Any]) -> bool:
         lv = last.get(k)
         nv = new.get(k)
         if k == "price":
-            try:
                 if abs(float(lv) - float(nv)) > 0.0001:
-                    return False
-            except Exception:
-                if str(lv) != str(nv):
-                    return False
-        elif k == "dep_time":
-            try:
-                if int(lv) != int(nv):
-                    return False
-            except Exception:
-                if str(lv) != str(nv):
                     return False
         else:
             if str(lv) != str(nv):
