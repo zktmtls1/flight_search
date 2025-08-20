@@ -84,6 +84,125 @@ def is_duplicate_last(path: Path, row: Dict[str, Any]) -> bool:
     if not last: #저장된 기록 없으면
         return False 
     return _rows_equivalent(last, row) # 같으면 True 반환
+
+
+## 항공편 조건 받아서 검색 후 반환
+def search_flights(
+    *, 
+    originLocationCode: str,    #출발지
+    destinationLocationCode: str,   #도착지
+    departureDate: str,
+    adults: int = 1,
+    airlineCode: str = "",
+    currencyCode: str = "KRW",
+    max_results: int = 5,
+):
+    params = {
+        "originLocationCode": originLocationCode,
+        "destinationLocationCode": destinationLocationCode,
+        "departureDate": departureDate,
+        "adults": adults,
+        "currencyCode": currencyCode,
+        "max": 250,
+    }
+
+    if airlineCode:
+        params["includedAirlineCodes"] = airlineCode #항공사 필터링
+
+    r = amadeus.shopping.flight_offers_search.get(**params)
+    offers = r.data or [] ### None 가져올 때 방어용 빈 리스트
+    offers.sort(key=lambda o: float(o["price"]["grandTotal"]))
+    return offers[:max_results] #가격 하위 5개만 반환
+
+
+def search_lowest_fares(
+    *,
+    originLocationCode: str,
+    destinationLocationCode: str,
+    departureDate: str,
+    adults: int = 1,
+    airlineCodes: Optional[List[str]] = None,
+    currencyCode: str = "KRW",
+):
+
+    params = {
+        "originLocationCode": originLocationCode,
+        "destinationLocationCode": destinationLocationCode,
+        "departureDate": departureDate,
+        "adults": adults,
+        "currencyCode": currencyCode,
+        "max": 250, #한번에 가져올 수 있는 데이터 요청 숭
+    }
+    if airlineCodes:
+        params["includedAirlineCodes"] = ",".join(airlineCodes)
+
+    r = amadeus.shopping.flight_offers_search.get(**params) 
+    offers = r.data or []
+    if not offers:
+        return []
+
+    # 항공사별 최저가 한 건만 남김
+    best: Dict[str, Dict[str, Any]] = {}
+    allow = set(airlineCodes) if airlineCodes else None
+    for o in offers:
+        try:
+            it = o["itineraries"][0]    # 출국편도 (왕복이면 1)
+            segs = it["segments"]   #segments: 한 경로에 대한 도착지까지의 총 비행편 정보. 직항이면 1개, 경유라면 여러 비행편 정보 들어감
+            al = segs[0]["carrierCode"] # 항공사 코드 (경유 있다면 첫 항공편의 항공사)
+            if allow and al not in allow:   # 포함하지 않기로 한 항공사라면 스킵
+                continue
+            price = float(o["price"]["grandTotal"]) # 세금 등 포함 최종 가격
+            if (al not in best) or (price < float(best[al]["price"]["grandTotal"])): #항공사별 첫 정보이거나 최저가 갱신시 치환
+                best[al] = o
+        except Exception:
+            continue
+    if not best:
+        return []
+
+
+    now_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    rows = []
+    for al, o in sorted(best.items()):
+        it = o["itineraries"][0]
+        segs = it["segments"]
+        dep = segs[0]["departure"]
+        arr = segs[-1]["arrival"]
+        row = {
+            "collected_at_utc": now_utc,
+            "travel_date": departureDate,
+            "origin": originLocationCode,
+            "dest": destinationLocationCode,
+            "airline": al,
+            "flight_no": f"{segs[0]['carrierCode']}{segs[0]['number']}",
+            "dep_time": dep["at"],
+            "arr_time": arr["at"],
+            "stops": len(segs) - 1,
+            "duration": it.get("duration", ""),
+            "price": float(o["price"]["grandTotal"]),
+            "currency": o["price"]["currency"],
+        }
+
+        path = csv_path(originLocationCode, destinationLocationCode, al)
+        last = _get_last_row(path)
+        if not last or not _rows_equivalent(last, row):
+            append_row(path, row)
+
+        # 템플릿에 바로 쓰는 형태
+        rows.append({
+            "airline": al,
+            "flight_no": row["flight_no"],
+            "dep": dep.get("iataCode", ""),
+            "arr": arr.get("iataCode", ""),
+            "dep_time": row["dep_time"],
+            "arr_time": row["arr_time"],
+            "stops": row["stops"],
+            "duration": row["duration"],
+            "price": row["price"],
+            "currency": row["currency"],
+        })
+
+    rows.sort(key=lambda x: x["price"])
+    return rows
 #################################################################################################################
 
 
@@ -207,112 +326,61 @@ def send_email(
 
 
 def main():
-    # 검색 파라미터(출발,도착 공항/ 날짜 /항공사)
-    origin = "ICN"   # 출발          
-    dest = "NRT"          # 도착     
-    travel_date = "2025-08-25" 
+    # 기본 파라미터 (원하면 환경변수로 치환 가능)
+    origin = "ICN"
+    dest = "NRT"
+    travel_date = "2025-08-25"
+    airline_list = ["KE","OZ","7C","TW","LJ","ZE","RS","BX","YP"]
 
-    # - KE: 대한항공, OZ: 아시아나, YP: 에어프레미아
-    # - 7C: 제주, TW: 티웨이, LJ: 진에어, ZE: 이스타, RS: 에어서울, BX: 에어부산
-    lcc_codes = ["KE","OZ","7C","TW","LJ","ZE","RS","BX","YP"]
+    # 항공사별 최저가 1건씩 선택 + CSV 저장(중복 방지)까지 수행
+    rows = search_lowest_fares(
+        originLocationCode=origin,
+        destinationLocationCode=dest,
+        departureDate=travel_date,
+        adults=1,
+        airlineCodes=airline_list,
+        currencyCode="KRW",
+    )
+    if not rows:
+        print("검색 결과가 없습니다.")
+        return
 
-    # Amadeus 검색 파라미터
-    params = {
-        "originLocationCode": origin, 
-        "destinationLocationCode": dest, 
-        "departureDate": travel_date,
-        "adults": 1,
-        "currencyCode": "KRW",
-        "includedAirlineCodes": ",".join(lcc_codes), 
-        "max": 250,  # 최대 반환 오퍼 수 (상한 늘리면 쿼터/시간 사용량 증가 가능)
-    }
-    try:
-        r = amadeus.shopping.flight_offers_search.get(**params) # 항공권 검색 요청, r에 저장
-        offers: List[Dict[str, Any]] = r.data or []  ### None 가져올 때 방어용 빈 리스트,  [str, Any]: 키 형식은 srt, 값 형식은 아무거나
-        if not offers:
-            print("검색 결과가 없습니다.")
-            return
+    # 요약 출력
+    print(f"[최저가 요약] {origin}→{dest} {travel_date} / {len(rows)}개")
+    for r in rows:
+        print(
+            f"{r['airline']} {r['flight_no']} "
+            f"{r['dep_time']}→{r['arr_time']}  "
+            f"stops:{r['stops']} ({r['duration']})  "
+            f"{r['price']:.0f} {r['currency']}"
+        )
 
-        # 항공사별로 '최저가' 한 건만 남기기 위한 딕셔너리
-        best: Dict[str, Dict[str, Any]] = {}
-        for o in offers:
-            it = o["itineraries"][0] # 출국편도 (왕복이면 1)
-            segs = it["segments"] #segments: 한 경로에 대한 도착지까지의 총 비행편 정보. 직항이면 1개, 경유라면 여러 비행편 정보 들어감
-            airline = segs[0]["carrierCode"]  # 항공사 코드 (경유 있다면 첫 항공편의 항공사)
-            if airline not in lcc_codes:
-                # 포함하지 않기로 한 항공사라면 스킵
-                continue
-            price = float(o["price"]["grandTotal"])  # 세금 등 포함 최종 가격
-            if (airline not in best) or (price < float(best[airline]["price"]["grandTotal"])): #항공사별 첫 정보이거나 최저가 갱신시 치환
-                best[airline] = o
-            
+    ########################################### email 발송 + ################################################
+    email_receiver = "zktmtls1@naver.com"
+    for r in rows:
+        path = csv_path(origin, dest, r["airline"])
+        prices = find_two_prices(path)
+        if not prices:
+            continue  # 데이터 2개 미만이면 패스
 
-        # 현재(UTC) 타임스탬프: 수집 시각 기록용
-        now_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-        # 항공사 코드 정렬 후, 각 항공사별 최저가를 CSV에 한 줄씩 저장
-        for al, o in sorted(best.items()):
-            it = o["itineraries"][0]
-            segs = it["segments"]
-            dep = segs[0]["departure"]
-            arr = segs[-1]["arrival"]
-
-            # CSV 구성
-            row = {
-                "collected_at_utc": now_utc,
-                "travel_date": travel_date,
-                "origin": origin,
-                "dest": dest,
-                "airline": al,
-                "flight_no": f'{segs[0]["carrierCode"]}{segs[0]["number"]}',
-                "dep_time": dep["at"],
-                "arr_time": arr["at"],
-                "stops": len(segs) - 1,             # 직항=0, 경유 횟수=(세그먼트-1)
-                "duration": it.get("duration",""),  # 운행 시간 EX)"PT2H20M" = 2시간 20분 (ISO-8601 기간 표기)
-                "price": float(o["price"]["grandTotal"]),
-                "currency": o["price"]["currency"],
-            }
-
-            path = csv_path(origin, dest, al)
-            last = _get_last_row(path)
-
-            # 새 데이터가 직전과 동일할시 저장 생략
-            if last and _rows_equivalent(last, row):
-                print(f"{al}: 가격 동결: {float(last['price']):,.0f} KRW (변화 없음, 저장 생략)")
-                continue
-
-            # 다르면 저장
-            append_row(path, row)
-            print(f"{al}: {row['price']:.0f} {row['currency']} 저장됨")
-
-
-            ########################################### email 발송 + ################################################
-            email_receiver = "zktmtls1@naver.com"
-            # 3) 이전가와 비교해 인하/인상 판단 (기존 find_two_prices 안 써도 됨)
-            if last:
-                prev_price = float(last["price"])
-                last_price = float(row["price"])
-                sale_price = prev_price - last_price
-
-                if sale_price > 0:
-                    lowest_price = pandas.read_csv(path)["price"].min()
-                    price_msg = (
-                        f"가격 인하! : {prev_price:,.0f} KRW → {last_price:,.0f} KRW "
-                        f"/ 역대 최저가 : {lowest_price:,.0f} KRW"
-                    )
-                    print(price_msg)
-                    send_email(
-                        origin, dest, travel_date, al,
-                        row["flight_no"], dep["at"], arr["at"],
-                        price_msg, email_receiver
-                    )
-                elif sale_price < 0:
-                    print(f"가격 인상: {prev_price:,.0f} KRW → {last_price:,.0f} KRW")
+        last_price, prev_price = prices  
+        if last_price < prev_price:
+            lowest_price = pandas.read_csv(path)["price"].min()
+            price_msg = (
+                f"가격 인하! : {prev_price:,.0f} KRW → {last_price:,.0f} KRW "
+                f"/ 역대 최저가 : {lowest_price:,.0f} KRW"
+            )
+            print(price_msg)
+            send_email(
+                origin, dest, travel_date, r["airline"],
+                r["flight_no"], r["dep_time"], r["arr_time"],
+                price_msg, email_receiver
+            )
+        elif last_price > prev_price:
+            print(f"가격 인상: {prev_price:,.0f} KRW → {last_price:,.0f} KRW")
+        else:
+            print(f"가격 동결: {prev_price:,.0f} KRW")
             ########################################################################################################
-
-    except ResponseError as e:
-        # Amadeus SDK 예외 처리(HTTP 오류/쿼터 초과/파라미터 오류 등)
-        print("Flight Offers Search 오류:", e)
-
+    
 if __name__ == "__main__":
     main()
