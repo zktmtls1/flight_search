@@ -298,7 +298,6 @@ def send_email(
                     도착 시각 : {arr_time[:4]}년 {arr_time[5:7]}월 {arr_time[8:10]}일 {arr_time_12}<br>
                     항공사 : {airline_info[airline][0]}({airline})<br>
                     기종 : {flight_no}<br>
-                    url : {airline_info[airline][1]}<br><br>
                     놓치기 전에 서두르세요!
                 </p>
             </body>
