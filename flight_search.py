@@ -257,7 +257,7 @@ def main():
             dep = segs[0]["departure"]
             arr = segs[-1]["arrival"]
 
-            # CSV 한 행 구성
+            # CSV 구성
             row = {
                 "collected_at_utc": now_utc,
                 "travel_date": travel_date,
@@ -274,18 +274,23 @@ def main():
             }
 
             path = csv_path(origin, dest, al)
-            
-            if is_duplicate_last(path, row):
-                print(f"{al}: 동일 데이터 감지, 저장 생략")
+            last = _get_last_row(path)
+
+            # 1) 완전 동일 → 저장 생략 + 동결 출력
+            if last and _rows_equivalent(last, row):
+                print(f"{al}: 가격 동결: {float(last['price']):,.0f} KRW (변화 없음, 저장 생략)")
                 continue
+
+            # 2) 다르면 저장
             append_row(path, row)
             print(f"{al}: {row['price']:.0f} {row['currency']} 저장됨")
 
+
             email_receiver = "zktmtls1@naver.com"
-            
-            prices = find_two_prices(path)
-            if prices:
-                last_price, prev_price = prices  # 가장 최근, 그 이전
+            # 3) 이전가와 비교해 인하/인상 판단 (기존 find_two_prices 안 써도 됨)
+            if last:
+                prev_price = float(last["price"])
+                last_price = float(row["price"])
                 sale_price = prev_price - last_price
 
                 if sale_price > 0:
@@ -302,8 +307,6 @@ def main():
                     )
                 elif sale_price < 0:
                     print(f"가격 인상: {prev_price:,.0f} KRW → {last_price:,.0f} KRW")
-                else:
-                    print(f"가격 동결: {prev_price:,.0f} KRW")
 
     except ResponseError as e:
         # Amadeus SDK 예외 처리(HTTP 오류/쿼터 초과/파라미터 오류 등)
