@@ -62,13 +62,17 @@ def _rows_equivalent(last: dict[str, str], new: dict[str, Any]) -> bool:
     for k in keys:
         lv = last.get(k)
         nv = new.get(k)
-        if k == "price":
-                if abs(float(lv) - float(nv)) > 0.0001:
-                    return False
-        else:
+        if k == "price": #가격, 경유 횟수만 수로 비교 
+            if abs(float(lv) - float(nv)) > 0.0001:
+               return False
+        elif k == "stops":
+            if int(lv) != int(nv):
+                return False
+        else: #나머지 문자열 비교
             if str(lv) != str(nv):
                 return False
     return True
+
 
 def is_duplicate_last(path: Path, row: dict[str, Any]) -> bool:
     last = _get_last_row(path)
