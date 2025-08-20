@@ -69,7 +69,7 @@ def _rows_equivalent(last: dict[str, str], new: dict[str, Any]) -> bool:
             except Exception:
                 if str(lv) != str(nv):
                     return False
-        elif k == "stops":
+        elif k == "dep_time":
             try:
                 if int(lv) != int(nv):
                     return False
