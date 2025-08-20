@@ -84,7 +84,7 @@ def is_duplicate_last(path: Path, row: Dict[str, Any]) -> bool:
     if not last: #저장된 기록 없으면
         return False 
     return _rows_equivalent(last, row) # 같으면 True 반환
-##########################################################################################################
+#################################################################################################################
 
 
 
@@ -201,7 +201,7 @@ def send_email(
         print("메일 발송 완료")
     except Exception as e:# 오류 발생 시
         print("메일 발송 오류:", e)
-##########################################################################################################
+#################################################################################################################
 
 
 
@@ -276,16 +276,17 @@ def main():
             path = csv_path(origin, dest, al)
             last = _get_last_row(path)
 
-            # 1) 완전 동일 → 저장 생략 + 동결 출력
+            # 새 데이터가 직전과 동일할시 저장 생략
             if last and _rows_equivalent(last, row):
                 print(f"{al}: 가격 동결: {float(last['price']):,.0f} KRW (변화 없음, 저장 생략)")
                 continue
 
-            # 2) 다르면 저장
+            # 다르면 저장
             append_row(path, row)
             print(f"{al}: {row['price']:.0f} {row['currency']} 저장됨")
 
 
+            ########################################### email 발송 + ################################################
             email_receiver = "zktmtls1@naver.com"
             # 3) 이전가와 비교해 인하/인상 판단 (기존 find_two_prices 안 써도 됨)
             if last:
@@ -307,6 +308,7 @@ def main():
                     )
                 elif sale_price < 0:
                     print(f"가격 인상: {prev_price:,.0f} KRW → {last_price:,.0f} KRW")
+            ########################################################################################################
 
     except ResponseError as e:
         # Amadeus SDK 예외 처리(HTTP 오류/쿼터 초과/파라미터 오류 등)
