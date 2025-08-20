@@ -184,8 +184,12 @@ def search_lowest_fares(
 
         path = csv_path(originLocationCode, destinationLocationCode, al)
         last = _get_last_row(path)
-        if not last or not _rows_equivalent(last, row):
+        stored = False
+        prev_price = float(last["price"]) if last else None
+        
+        if (not last) or (not _rows_equivalent(last, row)):
             append_row(path, row)
+            stored = True
 
         # 템플릿에 바로 쓰는 형태
         rows.append({
@@ -199,6 +203,8 @@ def search_lowest_fares(
             "duration": row["duration"],
             "price": row["price"],
             "currency": row["currency"],
+            "stored": stored,          # 이번 실행에서 CSV에 새로 썼는지
+            "prev_price": prev_price,  # 직전 가격(있을 때)
         })
 
     rows.sort(key=lambda x: x["price"])
@@ -358,11 +364,14 @@ def main():
     email_receiver = "zktmtls1@naver.com"
     for r in rows:
         path = csv_path(origin, dest, r["airline"])
+        
         prices = find_two_prices(path)
         if not prices:
             continue  # 데이터 2개 미만이면 패스
-
-        last_price, prev_price = prices  
+        if not r.get("stored"):
+            print(f"가격 동결: {r['price']:,.0f} KRW (신규 저장 없음)")
+            continue
+        last_price, prev_price = prices
         if last_price < prev_price:
             lowest_price = pandas.read_csv(path)["price"].min()
             price_msg = (
