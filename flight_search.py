@@ -6,6 +6,8 @@ from pathlib import Path #경로 조작
 from datetime import datetime, timezone #시간 처리
 import csv
 ########## email을 통한 할인 알림 라이브러리 ########################
+import json # github에 메일전송을 위한 입력값 저장
+from pathlib import Path
 import smtplib #메일전송
 import pandas
 from email.mime.text import MIMEText #메일의 꾸미기
@@ -325,17 +327,28 @@ def send_email(
         print("메일 발송 완료")
     except Exception as e:# 오류 발생 시
         print("메일 발송 오류:", e)
+
+def load_cfg():
+    p = Path(__file__).with_name("config.json")
+    if p.exists():
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 #################################################################################################################
 
 
 
-
 def main():
+    cfg = load_cfg()
+    
     # 기본 파라미터 (원하면 환경변수로 치환 가능)
-    origin = "ICN"
-    dest = "NRT"
-    travel_date = "2025-08-25"
-    airline_list = ["KE","OZ","7C","TW","LJ","ZE","RS","BX","YP"]
+    origin       = cfg.get("origin", "ICN")
+    dest         = cfg.get("dest", "NRT")
+    travel_date  = cfg.get("travel_date", "2025-09-01")
+    airline_list = cfg.get("airline_codes", ["KE","OZ","7C","TW","LJ","ZE","RS","BX","YP"])
+    currency     = "KRW"
+    email_to     = cfg.get("email_to")              # 수신자(없으면 미발송)
+    email_on     = bool(cfg.get("email_enabled", True))  # ← 토글(기본 ON)
 
     # 항공사별 최저가 1건씩 선택 + CSV 저장(중복 방지)까지 수행
     rows = search_lowest_fares(
@@ -344,7 +357,7 @@ def main():
         departureDate=travel_date,
         adults=1,
         airlineCodes=airline_list,
-        currencyCode="KRW",
+        currencyCode=currency,
     )
     if not rows:
         print("검색 결과가 없습니다.")
@@ -361,7 +374,7 @@ def main():
         )
 
     ########################################### email 발송 + ################################################
-    email_receiver = "zktmtls1@naver.com"
+    email_receiver = "email_to"
     for r in rows:
         path = csv_path(origin, dest, r["airline"])
         
@@ -379,11 +392,13 @@ def main():
                 f"/ 역대 최저가 : {lowest_price:,.0f} KRW"
             )
             print(price_msg)
-            send_email(
-                origin, dest, travel_date, r["airline"],
-                r["flight_no"], r["dep_time"], r["arr_time"],
-                price_msg, email_receiver
-            )
+
+            if email_on and email_to:
+                send_email(
+                    origin, dest, travel_date, r["airline"],
+                    r["flight_no"], r["dep_time"], r["arr_time"],
+                    price_msg, email_receiver
+                )
         elif last_price > prev_price:
             print(f"가격 인상: {prev_price:,.0f} KRW → {last_price:,.0f} KRW")
         else:
