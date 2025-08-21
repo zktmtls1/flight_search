@@ -3,7 +3,8 @@
   "dest": "NRT",
   "travel_date": "2025-09-26",
   "airline_codes": [
-    "KE"
+    "KE",
+    "7C"
   ],
   "currency": "KRW",
   "email_to": "zktmtls1@naver.com",
