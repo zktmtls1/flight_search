@@ -1,0 +1,2 @@
+collected_at_utc,travel_date,origin,dest,airline,flight_no,dep_time,arr_time,stops,duration,price,currency
+2025-08-21T05:29:08+00:00,2025-09-15,ICN,NRT,YP,YP731,2025-09-15T08:50:00,2025-09-15T11:20:00,0,PT2H30M,187700.0,KRW
