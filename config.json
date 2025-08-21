@@ -1,9 +1,9 @@
 {
-  "origin": "인천",
+  "origin": "ICN",
   "dest": "NRT",
-  "travel_date": "2025-09-11",
+  "travel_date": "2025-09-12",
   "airline_codes": [],
   "currency": "KRW",
   "email_to": "zktmtls1@naver.com",
-  "email_enabled": true
+  "email_enabled": false
 }
