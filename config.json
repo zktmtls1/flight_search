@@ -1,12 +1,11 @@
 {
-  "origin": "ICN",
-  "dest": "NRT",
-  "travel_date": "2025-08-31",
-  "airline_codes": [
-    "7C",
-    "YP"
-  ],
-  "currency": "KRW",
-  "email_to": "zktmtls1@naver.com",
-  "email_enabled": True
+    "origin": "ICN",
+    "dest": "NRT",
+    "travel_date": "2025-08-29",
+    "airline_codes": [
+        "KE",
+        "OZ"
+    ],
+    "email_to": "zktmtls1@naver.com",
+    "email_enabled": true
 }
