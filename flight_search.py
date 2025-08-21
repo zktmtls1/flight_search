@@ -1,108 +1,89 @@
 from amadeus import Client, ResponseError
-from dotenv import load_dotenv  # api 키 등 환경변수 저장
-import os #환경변수 읽기
+from dotenv import load_dotenv  
+import os
 from typing import Any, Dict, List, Optional
-from pathlib import Path #경로 조작
-from datetime import datetime, timezone #시간 처리
+from pathlib import Path 
+from datetime import datetime, timezone 
 import csv
-########## email을 통한 할인 알림 라이브러리 ########################
-import json # github에 메일전송을 위한 입력값 저장
-from pathlib import Path
-import smtplib #메일전송
-import pandas
-from email.mime.text import MIMEText #메일의 꾸미기
-#################################################################
 
-# .env 파일에 있는 환경변수(예: AMADEUS_CLIENT_ID 등)를 현재 프로세스에 로드
+import json 
+from pathlib import Path
+import smtplib 
+import pandas
+from email.mime.text import MIMEText
+
 load_dotenv()
 
-# Amadeus 클라이언트 생성
 amadeus = Client(
     client_id=os.getenv("AMADEUS_CLIENT_ID"),
     client_secret=os.getenv("AMADEUS_CLIENT_SECRET"),
     hostname=os.getenv("AMADEUS_HOSTNAME", "test"),
 )
 
-# 데이터 저장 폴더 경로 설정
 DATA_DIR = Path(__file__).with_name("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 
-########################################### csv 생성, 데이터 저장 관련 함수 ################################################
 
-# 지정 경로에 항공사별, 날짜별 csv 생성
 def csv_path(origin: str, dest: str, airline: str, travel_date: str) -> Path:
-    """지정 경로에 항공사별, 날짜별 csv 경로를 반환합니다."""
     return DATA_DIR / f"prices_{origin.lower()}-{dest.lower()}_{airline.lower()}_{travel_date}.csv"
 
-
-# csv파일이 없다면 header생성, 있다면 데이터 행추가
-def append_row(path: Path, row: Dict[str, Any]) -> None: #키: 문자열, 값: 아무 타입
-    """CSV 파일에 행을 추가합니다. 파일이 없으면 헤더를 생성합니다."""
+def append_row(path: Path, row: Dict[str, Any]) -> None:
     header = [
         "collected_at_utc","travel_date","origin","dest","airline",
         "flight_no","dep_time","arr_time","stops","duration","price","currency"
     ]
-    is_new = not path.exists() #파일 존재 여부 논리
-    with path.open("a", newline="", encoding="utf-8") as f: #파일 열기
+    is_new = not path.exists() 
+    with path.open("a", newline="", encoding="utf-8") as f: 
         w = csv.DictWriter(f, fieldnames=header)
         if is_new:
-            w.writeheader() #csv 파일 없다면 헤더 추가
-        w.writerow(row) #있다면 데이터 추가
+            w.writeheader() 
+        w.writerow(row) 
 
-
-# 데이터 추가 여부를 위해 csv 마지막 행 데이터 확인
 def _get_last_row(path: Path) -> Optional[Dict[str, str]]:
-    """CSV 파일의 마지막 행 데이터를 반환합니다."""
-    if not path.exists(): #파일 없다면
+    if not path.exists():
         return None
     with path.open("r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
-        return rows[-1] if rows else None #데이터가 있다면 마지막 행 가져오기
+        return rows[-1] if rows else None 
 
 
-# 새 데이터가 마지막 데이터행과 동일한지 확인
 def _rows_equivalent(last: Dict[str, str], new: Dict[str, Any]) -> bool:
-    """두 데이터 행이 동일한지 확인합니다."""
     keys = ["travel_date","origin","dest","airline","flight_no","dep_time",
             "arr_time","stops","duration","price","currency"]
     for k in keys:
         lv = last.get(k)
         nv = new.get(k)
-        if k == "price": #가격, 경유 횟수만 수로 비교
+        if k == "price":
             if abs(float(lv) - float(nv)) > 0.0001:
                 return False
                 
         elif k == "stops":
             if int(lv) != int(nv):
                 return False
-        else: #나머지 문자열 비교
+        else: 
             if str(lv) != str(nv):
                 return False
     return True
 
 
-# 최종적으로 같으면 true, 다르면 false
 def is_duplicate_last(path: Path, row: Dict[str, Any]) -> bool:
-    """마지막 행과 신규 데이터가 중복되는지 확인합니다."""
     last = _get_last_row(path)
-    if not last: #저장된 기록 없으면
+    if not last:
         return False
-    return _rows_equivalent(last, row) # 같으면 True 반환
+    return _rows_equivalent(last, row)
 
 
-# 항공편 조건 받아서 검색 후 반환
 def search_flights(
     *,
-    originLocationCode: str,    #출발지
-    destinationLocationCode: str,   #도착지
+    originLocationCode: str,   
+    destinationLocationCode: str,  
     departureDate: str,
     adults: int = 1,
     airlineCode: str = "",
     currencyCode: str = "KRW",
     max_results: int = 5,
 ):
-    """Amadeus API로 항공편을 검색하고 최저가 5개를 반환합니다."""
     params = {
         "originLocationCode": originLocationCode,
         "destinationLocationCode": destinationLocationCode,
@@ -113,12 +94,12 @@ def search_flights(
     }
 
     if airlineCode:
-        params["includedAirlineCodes"] = airlineCode #항공사 필터링
+        params["includedAirlineCodes"] = airlineCode 
 
     r = amadeus.shopping.flight_offers_search.get(**params)
-    offers = r.data or [] ### None 가져올 때 방어용 빈 리스트
+    offers = r.data or [] 
     offers.sort(key=lambda o: float(o["price"]["grandTotal"]))
-    return offers[:max_results] #가격 하위 5개만 반환
+    return offers[:max_results] 
 
 
 def search_lowest_fares(
@@ -130,14 +111,14 @@ def search_lowest_fares(
     airlineCodes: Optional[List[str]] = None,
     currencyCode: str = "KRW",
 ):
-    """지정된 항공사별로 최저가 항공편을 검색하여 CSV에 저장합니다."""
+
     params = {
         "originLocationCode": originLocationCode,
         "destinationLocationCode": destinationLocationCode,
         "departureDate": departureDate,
         "adults": adults,
         "currencyCode": currencyCode,
-        "max": 250, #한번에 가져올 수 있는 데이터 요청 숭
+        "max": 250, 
     }
     if airlineCodes:
         params["includedAirlineCodes"] = ",".join(airlineCodes)
@@ -147,18 +128,17 @@ def search_lowest_fares(
     if not offers:
         return []
 
-    # 항공사별 최저가 한 건만 남김
     best: Dict[str, Dict[str, Any]] = {}
     allow = set(airlineCodes) if airlineCodes else None
     for o in offers:
         try:
-            it = o["itineraries"][0]    # 출국편도 (왕복이면 1)
-            segs = it["segments"]   #segments: 한 경로에 대한 도착지까지의 총 비행편 정보. 직항이면 1개, 경유라면 여러 비행편 정보 들어감
-            al = segs[0]["carrierCode"] # 항공사 코드 (경유 있다면 첫 항공편의 항공사)
-            if allow and al not in allow:   # 포함하지 않기로 한 항공사라면 스킵
+            it = o["itineraries"][0]   
+            segs = it["segments"]  
+            al = segs[0]["carrierCode"] 
+            if allow and al not in allow:   
                 continue
-            price = float(o["price"]["grandTotal"]) # 세금 등 포함 최종 가격
-            if (al not in best) or (price < float(best[al]["price"]["grandTotal"])): #항공사별 첫 정보이거나 최저가 갱신시 치환
+            price = float(o["price"]["grandTotal"]) 
+            if (al not in best) or (price < float(best[al]["price"]["grandTotal"])): 
                 best[al] = o
         except Exception:
             continue
@@ -188,7 +168,6 @@ def search_lowest_fares(
             "currency": o["price"]["currency"],
         }
 
-        # 파일명에 travel_date 추가
         path = csv_path(originLocationCode, destinationLocationCode, al, departureDate)
         last = _get_last_row(path)
         stored = False
@@ -198,7 +177,6 @@ def search_lowest_fares(
             append_row(path, row)
             stored = True
 
-        # 템플릿에 바로 쓰는 형태
         rows.append({
             "airline": al,
             "flight_no": row["flight_no"],
@@ -210,27 +188,20 @@ def search_lowest_fares(
             "duration": row["duration"],
             "price": row["price"],
             "currency": row["currency"],
-            "stored": stored,        # 이번 실행에서 CSV에 새로 썼는지
-            "prev_price": prev_price,  # 직전 가격(있을 때)
+            "stored": stored,        
+            "prev_price": prev_price,  
         })
 
     rows.sort(key=lambda x: x["price"])
     return rows
-#################################################################################################################
 
 
 
-
-
-########################################### email 발송관련 함수 ################################################
-
-# 새 데이터, 직전 데이터 가져옴(가격이 하락했으면 알람 발송 목표)
 def find_two_prices(path: Path) -> None:
-    """CSV 파일의 최근 두 가격을 찾아 반환합니다."""
     if not path.exists():
         print("CSV 파일이 아직 없습니다.")
         return
-    with path.open("r", encoding="utf-8") as f: #파일 오픈
+    with path.open("r", encoding="utf-8") as f: 
         rows = list(csv.DictReader(f))
     if len(rows) < 2:
         print("가격 비교를 위해 최소 2개의 데이터가 필요합니다.")
@@ -240,9 +211,7 @@ def find_two_prices(path: Path) -> None:
     return last_price, prev_price
 
 
-# 24시 체제 12시로 변환
 def convert_24_to_12_manual(hour:int, minute:int):
-    """24시 체제를 12시로 변환합니다."""
     period = "오전"
     if hour == 0:
         hour_12 = 12
@@ -257,7 +226,6 @@ def convert_24_to_12_manual(hour:int, minute:int):
     return f"{period} {hour_12:02d}시 {minute:02d}분"
 
 
-# 이메일 보내는 함수
 def send_email(
         origin:str,
         dest:str,
@@ -269,18 +237,14 @@ def send_email(
         price:str,
         receiver:str
         ) -> None:
-    """실제 이메일을 발송하는 함수입니다."""
     
-    # 송신자 e-mail 정보 .env 파일에서
     sender = os.getenv("EMAIL_SENDER")
     password = os.getenv("EMAIL_PASSWORD")
 
-    # 송신자 e-mail 또는 앱 비밀번호 또는 수신자 e-mail 정보가 없으면 오류 출력
     if not sender or not password or not receiver:
         print("이메일 환경 변수가 설정되지 않았습니다.")
         return
     
-    # 각 항공사의 IATA 코드에 따른 항공사명과 url 주소를 저장
     airline_info = {
         "KE": ["대한항공", "https://www.koreanair.com/booking/search"],
         "OZ": ["아시아나항공", "https://flyasiana.com/C/KR/KO/index"],
@@ -293,14 +257,11 @@ def send_email(
         "YP": ["에어프레미아", "https://www.airpremia.com/a/ko/ticket/flight?IS_POINT=false"]
     }
 
-    # e-mail의 제목
     subject = f"[항공권 가격 인하!] {travel_date} / {origin} → {dest} / {airline_info[airline][0]}"
 
-    #변환한 시간정보
     dep_time_12 = convert_24_to_12_manual(int(dep_time[11:13]), int(dep_time[14:16]))
     arr_time_12 = convert_24_to_12_manual(int(arr_time[11:13]), int(arr_time[14:16]))
 
-    # HTML 형식의 메일 본문
     html_body = f"""
         <html>
             <body>
@@ -320,38 +281,30 @@ def send_email(
         </html>
         """
     
-    # HTML 형식의 메일 본문을 담은 MIME 객체 생성
     msg = MIMEText(html_body, "html")
     msg["Subject"] = subject # 메일 제목 설정
     msg["From"] = sender
     msg["To"] = receiver
     try:
-        # Gmail의 SMTP 서버에 SSL 방식으로 연결 (포트 465)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            # 발신자 계정으로 로그인
             server.login(sender, password)
-            # 메일 발송 (발신자, 수신자, 메일 내용)
             server.sendmail(sender, receiver, msg.as_string())
         print("메일 발송 완료")
     except Exception as e:# 오류 발생 시
         print("메일 발송 오류:", e)
 
 def load_cfg():
-    """config.json 파일을 로드합니다."""
     p = Path(__file__).with_name("config.json")
     if p.exists():
         with p.open("r", encoding="utf-8") as f:
             return json.load(f)
     return {}
-#################################################################################################################
 
 
 
 def main():
-    """메인 실행 함수: 항공권 가격을 검색하고 저장하며, 가격이 하락하면 알림을 보냅니다."""
     cfg = load_cfg()
     
-    # 기본 파라미터 (원하면 환경변수로 치환 가능)
     origin        = cfg.get("origin", "ICN")
     dest          = cfg.get("dest", "NRT")
     travel_date   = cfg.get("travel_date", "2025-09-01")
@@ -360,7 +313,6 @@ def main():
     email_to      = cfg.get("email_to")         # 수신자(없으면 미발송)
     email_on      = bool(cfg.get("email_enabled", True))  # ← 토글(기본 ON)
 
-    # 항공사별 최저가 1건씩 선택 + CSV 저장(중복 방지)까지 수행
     rows = search_lowest_fares(
         originLocationCode=origin,
         destinationLocationCode=dest,
@@ -373,7 +325,6 @@ def main():
         print("검색 결과가 없습니다.")
         return
 
-    # 요약 출력
     print(f"[최저가 요약] {origin}→{dest} {travel_date} / {len(rows)}개")
     for r in rows:
         print(
@@ -383,13 +334,10 @@ def main():
             f"{r['price']:.0f} {r['currency']}"
         )
 
-    # 이메일 발송 로직
     email_receiver = email_to
     for r in rows:
-        # 파일 경로에 travel_date 추가
         path = csv_path(origin, dest, r["airline"], travel_date)
         
-        # 파일이 존재하지 않으면 패스
         if not path.exists():
             print(f"파일이 존재하지 않아 가격 비교를 건너뜁니다: {path}")
             continue
@@ -399,7 +347,6 @@ def main():
             print(f"데이터가 부족하여 가격 비교를 건너뜁니다: {path}")
             continue
 
-        # 중복 데이터가 아니라 새로 저장된 경우에만 가격 변동을 확인
         if not r.get("stored"):
             print(f"가격 동결: {r['price']:,.0ff} KRW (신규 저장 없음)")
             continue
