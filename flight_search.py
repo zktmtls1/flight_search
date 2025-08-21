@@ -374,7 +374,7 @@ def main():
         )
 
     ########################################### email 발송 + ################################################
-    email_receiver = "email_to"
+    email_receiver = email_to
     for r in rows:
         path = csv_path(origin, dest, r["airline"])
         
