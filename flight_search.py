@@ -23,9 +23,9 @@ DATA_DIR = Path(__file__).with_name("data")
 
 # -------------------- CSV 파일 처리 함수 --------------------
 
-def csv_path(origin: str, dest: str, airline: str) -> Path:
-    """지정 경로에 항공사별 csv 경로를 반환합니다."""
-    return DATA_DIR / f"prices_{origin.lower()}-{dest.lower()}_{airline.lower()}.csv"
+def csv_path(origin: str, dest: str, airline: str, travel_date: str) -> Path:
+    """지정 경로에 항공사별, 날짜별 csv 경로를 반환합니다."""
+    return DATA_DIR / f"prices_{origin.lower()}-{dest.lower()}_{airline.lower()}_{travel_date}.csv"
 
 
 def _get_last_row(path: Path) -> Optional[Dict[str, str]]:
@@ -171,7 +171,7 @@ def main():
 
     # 각 항공사별 CSV 파일을 확인하며 가격 변동을 감지합니다.
     for airline in airline_list:
-        path = csv_path(origin, dest, airline)
+        path = csv_path(origin, dest, airline, travel_date)
         
         # 파일이 존재하지 않거나 데이터가 2개 미만이면 건너뜁니다.
         if not path.exists():
