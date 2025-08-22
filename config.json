@@ -10,5 +10,5 @@
   ],
   "currency": "KRW",
   "email_to": "zktmtls1@naver.com",
-  "email_enabled": true
+  "email_enabled": False
 }
